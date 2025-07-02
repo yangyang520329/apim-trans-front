@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全球化中文翻译工具</title>
+    <style>
+        /* ... 样式保持不变 ... */
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f4f4f4;
+            margin: 0;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: calc(100% - 20px);
+            height: 150px;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+            resize: vertical;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .translation-output {
+            margin-top: 25px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            min-height: 50px;
+            text-align: left;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+
+        /* 模态对话框样式 */
+        .modal {
+            display: none; /* 默认隐藏 */
+            position: fixed; /* 固定定位 */
+            z-index: 1; /* 位于顶部 */
+            left: 0;
+            top: 0;
+            width: 100%; /* 全屏 */
+            height: 100%; /* 全屏 */
+            overflow: auto; /* 允许滚动 */
+            background-color: rgba(0,0,0,0.4); /* 半透明背景 */
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #888;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 400px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        select {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin: 15px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+        }
+        .modal-buttons button {
+            width: 45%;
+            padding: 10px;
+            font-size: 16px;
+        }
+        .modal-buttons button.cancel {
+            background-color: #6c757d;
+        }
+        .modal-buttons button.cancel:hover {
+            background-color: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>全球化中文翻译工具</h1>
+        <textarea id="inputText" placeholder="请输入您要翻译的中文文本..."></textarea>
+        <button onclick="showLanguageSelection()">翻译</button>
+        <div class="translation-output" id="translationOutput">
+            翻译结果将显示在这里。
+        </div>
+    </div>
+
+    <div id="languageModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeModal()">&times;</span>
+            <h2>选择目标语言</h2>
+            <select id="targetLanguageSelect">
+                <option value="">请选择...</option>
+                <option value="en">英语 (English)</option>
+                <option value="ja">日语 (日本語)</option>
+                <option value="fr">法语 (Français)</option>
+                <option value="es">西班牙语 (Español)</option>
+                <option value="de">德语 (Deutsch)</option>
+            </select>
+            <div class="modal-buttons">
+                <button onclick="confirmTranslation()">确定</button>
+                <button class="cancel" onclick="closeModal()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // *** 将此替换为您的 Azure Front Door 终结点 URL，加上 AFD 路由中配置的 API 路径 ***
+        // 示例：如果您的 Front Door 终结点是 https://transep-hnfrd6ech5hta9dn.z01.azurefd.net
+        // 且路由中配置的 API 路径是 /translation/translate
+        const FRONT_DOOR_ENDPOINT = 'https://transep-hnfrd6ech5hta9dn.z01.azurefd.net/translation/translate'; // 请替换为您的实际 Front Door URL
+
+        let currentInputText = ''; // 用于存储待翻译的文本
+
+        function showLanguageSelection() {
+            const inputText = document.getElementById('inputText').value.trim();
+            const translationOutput = document.getElementById('translationOutput');
+
+            if (inputText === "") {
+                translationOutput.textContent = "请输入您要翻译的中文文本。";
+                return;
+            }
+            currentInputText = inputText; // 存储文本
+            document.getElementById('languageModal').style.display = 'flex'; // 显示模态对话框
+        }
+
+        function closeModal() {
+            document.getElementById('languageModal').style.display = 'none'; // 隐藏模态对话框
+            document.getElementById('targetLanguageSelect').value = ''; // 重置下拉选项
+        }
+
+        async function confirmTranslation() {
+            const targetLang = document.getElementById('targetLanguageSelect').value;
+            const translationOutput = document.getElementById('translationOutput');
+
+            if (targetLang === "") {
+                translationOutput.textContent = "请选择一个目标语言。";
+                return;
+            }
+
+            closeModal(); // 关闭模态对话框
+            translationOutput.textContent = "正在翻译中，请稍候...";
+
+            try {
+                const response = await fetch(FRONT_DOOR_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        // *** 重要：如果您的 APIM 产品需要订阅密钥，请在这里添加 ***
+                        // 'Ocp-Apim-Subscription-Key': 'YOUR_APIM_SUBSCRIPTION_KEY'
+                        // 请将 'YOUR_APIM_SUBSCRIPTION_KEY' 替换为您在 APIM 阶段 3.4 中获取的密钥
+                    },
+                    body: JSON.stringify({
+                        text: currentInputText, // 使用存储的文本
+                        targetLanguage: targetLang
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`翻译请求失败：${response.status} - ${errorData.message || '未知错误'}`);
+                }
+
+                const data = await response.json();
+                if (data.translatedText) {
+                    translationOutput.textContent = data.translatedText;
+                } else {
+                    translationOutput.textContent = "未能获取翻译结果，后端返回格式不正确。";
+                }
+                
+            } catch (error) {
+                console.error('翻译过程中发生错误:', error);
+                translationOutput.textContent = `翻译失败: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
